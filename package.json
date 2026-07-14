@@ -1,0 +1,71 @@
+{
+  "name": "@rfidreader/rfidreader-connect",
+  "version": "0.0.1",
+  "description": "Web SDK for RFIDReader — connect and command Mark3 RFID readers over BLE, USB, WebSocket, REST, or an in-app native bridge.",
+  "keywords": [
+    "rfid",
+    "reader",
+    "mark3",
+    "web-bluetooth",
+    "webusb",
+    "sdk"
+  ],
+  "license": "SEE LICENSE IN LICENSE",
+  "author": "Pratham Jaiswal <pr47h4m@gmail.com>",
+  "homepage": "https://github.com/RFIDReader/RFIDReaderConnect-ts-distribution",
+  "bugs": {
+    "url": "https://github.com/RFIDReader/RFIDReaderConnect-ts-distribution/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/RFIDReader/RFIDReaderConnect-ts-distribution.git"
+  },
+  "type": "module",
+  "sideEffects": false,
+  "main": "dist/index.cjs",
+  "module": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "obfuscate": "node scripts/obfuscate.mjs",
+    "dist": "npm run build && npm run obfuscate && npm run verify:dist",
+    "verify:dist": "node scripts/verify-dist.mjs",
+    "prepack": "npm run dist",
+    "lint": "eslint 'src/**/*.ts' 'tests/**/*.ts'",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit"
+  },
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.14.0",
+    "@types/w3c-web-serial": "^1.0.7",
+    "@types/w3c-web-usb": "^1.0.10",
+    "@types/web-bluetooth": "^0.0.20",
+    "@typescript-eslint/eslint-plugin": "^8.14.0",
+    "@typescript-eslint/parser": "^8.14.0",
+    "eslint": "^9.14.0",
+    "javascript-obfuscator": "^4.1.1",
+    "tsup": "^8.3.5",
+    "typescript": "^5.6.3",
+    "vitest": "^2.1.5"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
