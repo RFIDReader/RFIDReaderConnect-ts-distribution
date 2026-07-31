@@ -1,7 +1,7 @@
 {
   "name": "@rfidreader/rfidreader-connect",
-  "version": "0.0.1",
-  "description": "Web SDK for RFIDReader — connect and command Mark3 RFID readers over BLE, USB, WebSocket, REST, or an in-app native bridge.",
+  "version": "0.0.2",
+  "description": "Web SDK for RFIDReader — connect and command Mark3 RFID readers over BLE, USB, REST, or an in-app native bridge.",
   "keywords": [
     "rfid",
     "reader",

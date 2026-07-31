@@ -652,12 +652,7 @@ type TransportType = {
     readonly hostname?: string;
     readonly serviceUUID?: string;
     readonly maximumWriteValueLength?: number;
-    readonly debug?: boolean;
-} | {
-    readonly kind: "websocket";
-    readonly hostname: string;
-    readonly secure?: boolean;
-    readonly path?: string;
+    readonly acceptAllDevices?: boolean;
     readonly debug?: boolean;
 } | {
     readonly kind: "rest";
@@ -711,27 +706,12 @@ declare class BLETransport implements TransportProtocol {
         hostname?: string;
         serviceUUID?: string;
         maximumWriteValueLength?: number;
+        acceptAllDevices?: boolean;
         debug?: boolean;
     });
     private readonly hostname?;
+    private readonly acceptAllDevices;
     private readonly debug;
-    setDelegate(delegate: TransportDelegate): void;
-    connect(): Promise<void>;
-    disconnect(): Promise<void>;
-    sendData(data: ArrayLike<number>): Promise<void>;
-}
-
-/** WebSocket transport talking to `ws://<host>/ws` — mirrors ez-controller default. */
-declare class WebSocketTransport implements TransportProtocol {
-    private delegate;
-    private readonly opts;
-    private socket?;
-    constructor(delegate: TransportDelegate | undefined, opts: {
-        hostname: string;
-        secure?: boolean;
-        path?: string;
-        debug?: boolean;
-    });
     setDelegate(delegate: TransportDelegate): void;
     connect(): Promise<void>;
     disconnect(): Promise<void>;
@@ -768,10 +748,13 @@ declare class USBTransport implements TransportProtocol {
     private delegate;
     private readonly opts;
     private device?;
-    private iface?;
+    private controlInterface?;
+    private dataInterface?;
     private inEndpoint?;
     private outEndpoint?;
     private readLoopRunning;
+    private disconnectListener?;
+    private disconnectNotified;
     constructor(delegate?: TransportDelegate, opts?: {
         vendorId?: number;
         debug?: boolean;
@@ -781,6 +764,8 @@ declare class USBTransport implements TransportProtocol {
     private startReadLoop;
     disconnect(): Promise<void>;
     sendData(data: ArrayLike<number>): Promise<void>;
+    private closeDevice;
+    private notifyDisconnected;
 }
 
 /**
@@ -809,4 +794,4 @@ declare global {
     }
 }
 
-export { ASYNCHRONOUS_INVENTORY, AsyncInventoryParser, type AsyncInventoryParserDelegate, BLETransport, BOOT_BOOTLOADER, BOOT_FIRMWARE, BridgeTransport, COMMAND_CIPHER_VERSION, GET_ANTENNA_PORTS, GET_AVAILABLE_REGIONS, GET_CURRENT_REGION, GET_CURRENT_TEMPERATURE, GET_FREQUENCY_HOPPING, GET_GPI, GET_PROTOCOL_CONFIGURATION, GET_READER_CONFIGURATION, GET_SERIAL_NUMBER, GET_TAG_BUFFER, GET_TAG_PROTOCOL, GET_VERSION, HEARTBEAT_PREFIX, KILL_TAG, LOCK_TAG, MODULETECH_PREAMBLE, MODULETECH_TERMINATOR, MSG_CCITT_CRC_POLY, MSG_CRC_INIT, Messenger, type NativeBridgeAPI, READ_TAG_DATA, RESTTransport, RFIDReader, RFIDReaderAntennaPort, RFIDReaderBaudRate, RFIDReaderCommMode, RFIDReaderConfiguration, type RFIDReaderDelegate, type RFIDReaderError, RFIDReaderModel, RFIDReaderNotificationType, type RFIDReaderOptions, type RFIDReaderQ, RFIDReaderRFMode, RFIDReaderRegion, RFIDReaderSerialNumber, RFIDReaderSession, RFIDReaderTagMetadata, RFIDReaderTagSingulationData, RFIDReaderTagSingulationFlag, RFIDReaderTarget, RFIDReaderVersion, RFIDTag, type RFIDTagMemoryAddress, RFIDTagMemoryBank, type RFIDTagPassword, RFIDTagPhase, SET_ANTENNA_PORTS, SET_CURRENT_REGION, SET_CURRENT_TAG_PROTOCOL, SET_FREQUENCY_HOPPING, SET_GPO, SET_PROTOCOL_CONFIGURATION, SET_READER_CONFIGURATION, SINGLE_TAG_INVENTORY, SYNCHRONOUS_INVENTORY, StreamingOTAClient, type StreamingOTAClientDelegate, StreamingOTAError, type StreamingOTAErrorCode, type TransportDelegate, TransportNotReady, type TransportProtocol, type TransportType, USBTransport, Unimplemented, WRITE_TAG_DATA, WRITE_TAG_EPC, WebSocketTransport, WiFiTransportMode, calcCRC, commandCodeToName, decryptResponse, decryptResponseByte, defaultDelegate, defaultTransportDelegate, delay, dynamicQ, frequencyTable, getSubCRC, hexToBytes, int2Bytes, messageParser, moduleMessageParser, parseAntennaPorts, parseBatteryCycles, parseBatterySoc, parseBatterySoh, parseCommMode, parseDeviceName, parseFreqHopping, parseIPv4, parseMac, parseModel, parseNetworkPassword, parseNetworkSSID, parseNotificationType, parseProtocolConfig, parseReaderConfig, parseReaderSerialNumber, parseReaderVersion, parseRegion, parseSerialNumber, parseSetAntennaPortsRes, parseSetFreqHoppingRes, parseSetProtocolConfigRes, parseSetReaderConfigRes, parseSetRegionRes, parseSingleTag, parseTemperature, parseTime, parseVersion, parseWriteTagRes, readerError, sanitizeHost, staticQ, statusCodes, statusDescription, toHex };
+export { ASYNCHRONOUS_INVENTORY, AsyncInventoryParser, type AsyncInventoryParserDelegate, BLETransport, BOOT_BOOTLOADER, BOOT_FIRMWARE, BridgeTransport, COMMAND_CIPHER_VERSION, GET_ANTENNA_PORTS, GET_AVAILABLE_REGIONS, GET_CURRENT_REGION, GET_CURRENT_TEMPERATURE, GET_FREQUENCY_HOPPING, GET_GPI, GET_PROTOCOL_CONFIGURATION, GET_READER_CONFIGURATION, GET_SERIAL_NUMBER, GET_TAG_BUFFER, GET_TAG_PROTOCOL, GET_VERSION, HEARTBEAT_PREFIX, KILL_TAG, LOCK_TAG, MODULETECH_PREAMBLE, MODULETECH_TERMINATOR, MSG_CCITT_CRC_POLY, MSG_CRC_INIT, Messenger, type NativeBridgeAPI, READ_TAG_DATA, RESTTransport, RFIDReader, RFIDReaderAntennaPort, RFIDReaderBaudRate, RFIDReaderCommMode, RFIDReaderConfiguration, type RFIDReaderDelegate, type RFIDReaderError, RFIDReaderModel, RFIDReaderNotificationType, type RFIDReaderOptions, type RFIDReaderQ, RFIDReaderRFMode, RFIDReaderRegion, RFIDReaderSerialNumber, RFIDReaderSession, RFIDReaderTagMetadata, RFIDReaderTagSingulationData, RFIDReaderTagSingulationFlag, RFIDReaderTarget, RFIDReaderVersion, RFIDTag, type RFIDTagMemoryAddress, RFIDTagMemoryBank, type RFIDTagPassword, RFIDTagPhase, SET_ANTENNA_PORTS, SET_CURRENT_REGION, SET_CURRENT_TAG_PROTOCOL, SET_FREQUENCY_HOPPING, SET_GPO, SET_PROTOCOL_CONFIGURATION, SET_READER_CONFIGURATION, SINGLE_TAG_INVENTORY, SYNCHRONOUS_INVENTORY, StreamingOTAClient, type StreamingOTAClientDelegate, StreamingOTAError, type StreamingOTAErrorCode, type TransportDelegate, TransportNotReady, type TransportProtocol, type TransportType, USBTransport, Unimplemented, WRITE_TAG_DATA, WRITE_TAG_EPC, WiFiTransportMode, calcCRC, commandCodeToName, decryptResponse, decryptResponseByte, defaultDelegate, defaultTransportDelegate, delay, dynamicQ, frequencyTable, getSubCRC, hexToBytes, int2Bytes, messageParser, moduleMessageParser, parseAntennaPorts, parseBatteryCycles, parseBatterySoc, parseBatterySoh, parseCommMode, parseDeviceName, parseFreqHopping, parseIPv4, parseMac, parseModel, parseNetworkPassword, parseNetworkSSID, parseNotificationType, parseProtocolConfig, parseReaderConfig, parseReaderSerialNumber, parseReaderVersion, parseRegion, parseSerialNumber, parseSetAntennaPortsRes, parseSetFreqHoppingRes, parseSetProtocolConfigRes, parseSetReaderConfigRes, parseSetRegionRes, parseSingleTag, parseTemperature, parseTime, parseVersion, parseWriteTagRes, readerError, sanitizeHost, staticQ, statusCodes, statusDescription, toHex };
