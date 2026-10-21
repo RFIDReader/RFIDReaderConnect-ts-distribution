@@ -418,6 +418,10 @@ declare class RFIDReader {
     private activeStreamingOTAClient?;
     private _isConnected;
     private _isScanning;
+    private sendTail;
+    private connectionGeneration;
+    private scanGeneration;
+    private resynchronizing;
     constructor(opts: RFIDReaderOptions);
     setDelegate(delegate: RFIDReaderDelegate): void;
     getDelegate(): RFIDReaderDelegate;
@@ -484,6 +488,7 @@ declare class RFIDReader {
     private didBecomeReady;
     private receiveTransportData;
     private processResponseBuffer;
+    private findModuleFrame;
     private handleFrame;
     private buildAsyncDelegate;
     private markScanningStarted;
@@ -554,7 +559,6 @@ declare function parseTemperature(data: ArrayLike<number>): {
 };
 declare const moduleMessageParser: Readonly<Record<number, (data: ArrayLike<number>) => unknown>>;
 
-/** Callback surface for {@link AsyncInventoryParser}. Mirrors iOS `AsyncInventoryParserDelegate`. */
 interface AsyncInventoryParserDelegate {
     asyncInventoryParserDidReceiveStartAsyncInventory(): void;
     asyncInventoryParserDidReadTag(tag: RFIDTag): void;
@@ -562,14 +566,8 @@ interface AsyncInventoryParserDelegate {
     asyncInventoryParserDidReceiveStopAsyncInventory(): void;
     asyncInventoryParserDidEncounteredError(error: Error): void;
 }
-/**
- * Parses `0xFF 0xAA ...` frames the reader emits during asynchronous inventory.
- * Delivers one {@link RFIDTag} per tag response and dedicated callbacks for
- * heartbeat + start / stop sentinels.
- */
 declare class AsyncInventoryParser {
     private readonly delegate;
-    private static readonly TAG;
     constructor(delegate: AsyncInventoryParserDelegate);
     parse(data: ArrayLike<number>): void;
 }
@@ -794,4 +792,27 @@ declare global {
     }
 }
 
-export { ASYNCHRONOUS_INVENTORY, AsyncInventoryParser, type AsyncInventoryParserDelegate, BLETransport, BOOT_BOOTLOADER, BOOT_FIRMWARE, BridgeTransport, COMMAND_CIPHER_VERSION, GET_ANTENNA_PORTS, GET_AVAILABLE_REGIONS, GET_CURRENT_REGION, GET_CURRENT_TEMPERATURE, GET_FREQUENCY_HOPPING, GET_GPI, GET_PROTOCOL_CONFIGURATION, GET_READER_CONFIGURATION, GET_SERIAL_NUMBER, GET_TAG_BUFFER, GET_TAG_PROTOCOL, GET_VERSION, HEARTBEAT_PREFIX, KILL_TAG, LOCK_TAG, MODULETECH_PREAMBLE, MODULETECH_TERMINATOR, MSG_CCITT_CRC_POLY, MSG_CRC_INIT, Messenger, type NativeBridgeAPI, READ_TAG_DATA, RESTTransport, RFIDReader, RFIDReaderAntennaPort, RFIDReaderBaudRate, RFIDReaderCommMode, RFIDReaderConfiguration, type RFIDReaderDelegate, type RFIDReaderError, RFIDReaderModel, RFIDReaderNotificationType, type RFIDReaderOptions, type RFIDReaderQ, RFIDReaderRFMode, RFIDReaderRegion, RFIDReaderSerialNumber, RFIDReaderSession, RFIDReaderTagMetadata, RFIDReaderTagSingulationData, RFIDReaderTagSingulationFlag, RFIDReaderTarget, RFIDReaderVersion, RFIDTag, type RFIDTagMemoryAddress, RFIDTagMemoryBank, type RFIDTagPassword, RFIDTagPhase, SET_ANTENNA_PORTS, SET_CURRENT_REGION, SET_CURRENT_TAG_PROTOCOL, SET_FREQUENCY_HOPPING, SET_GPO, SET_PROTOCOL_CONFIGURATION, SET_READER_CONFIGURATION, SINGLE_TAG_INVENTORY, SYNCHRONOUS_INVENTORY, StreamingOTAClient, type StreamingOTAClientDelegate, StreamingOTAError, type StreamingOTAErrorCode, type TransportDelegate, TransportNotReady, type TransportProtocol, type TransportType, USBTransport, Unimplemented, WRITE_TAG_DATA, WRITE_TAG_EPC, WiFiTransportMode, calcCRC, commandCodeToName, decryptResponse, decryptResponseByte, defaultDelegate, defaultTransportDelegate, delay, dynamicQ, frequencyTable, getSubCRC, hexToBytes, int2Bytes, messageParser, moduleMessageParser, parseAntennaPorts, parseBatteryCycles, parseBatterySoc, parseBatterySoh, parseCommMode, parseDeviceName, parseFreqHopping, parseIPv4, parseMac, parseModel, parseNetworkPassword, parseNetworkSSID, parseNotificationType, parseProtocolConfig, parseReaderConfig, parseReaderSerialNumber, parseReaderVersion, parseRegion, parseSerialNumber, parseSetAntennaPortsRes, parseSetFreqHoppingRes, parseSetProtocolConfigRes, parseSetReaderConfigRes, parseSetRegionRes, parseSingleTag, parseTemperature, parseTime, parseVersion, parseWriteTagRes, readerError, sanitizeHost, staticQ, statusCodes, statusDescription, toHex };
+interface WebSocketTransportOptions {
+    readonly hostname: string;
+    readonly secure?: boolean;
+    readonly connectTimeoutMs?: number;
+    readonly writeTimeoutMs?: number;
+    readonly maximumBufferedBytes?: number;
+}
+/** Binary Wi-Fi stream using the firmware's batched, obfuscated response protocol. */
+declare class WebSocketTransport implements TransportProtocol {
+    private delegate;
+    private readonly opts;
+    private socket?;
+    private connecting?;
+    private cancelConnect?;
+    private disconnected;
+    constructor(delegate: TransportDelegate | undefined, opts: WebSocketTransportOptions);
+    setDelegate(delegate: TransportDelegate): void;
+    connect(): Promise<void>;
+    disconnect(): Promise<void>;
+    sendData(data: ArrayLike<number>): Promise<void>;
+    private notifyDisconnected;
+}
+
+export { ASYNCHRONOUS_INVENTORY, AsyncInventoryParser, type AsyncInventoryParserDelegate, BLETransport, BOOT_BOOTLOADER, BOOT_FIRMWARE, BridgeTransport, COMMAND_CIPHER_VERSION, GET_ANTENNA_PORTS, GET_AVAILABLE_REGIONS, GET_CURRENT_REGION, GET_CURRENT_TEMPERATURE, GET_FREQUENCY_HOPPING, GET_GPI, GET_PROTOCOL_CONFIGURATION, GET_READER_CONFIGURATION, GET_SERIAL_NUMBER, GET_TAG_BUFFER, GET_TAG_PROTOCOL, GET_VERSION, HEARTBEAT_PREFIX, KILL_TAG, LOCK_TAG, MODULETECH_PREAMBLE, MODULETECH_TERMINATOR, MSG_CCITT_CRC_POLY, MSG_CRC_INIT, Messenger, type NativeBridgeAPI, READ_TAG_DATA, RESTTransport, RFIDReader, RFIDReaderAntennaPort, RFIDReaderBaudRate, RFIDReaderCommMode, RFIDReaderConfiguration, type RFIDReaderDelegate, type RFIDReaderError, RFIDReaderModel, RFIDReaderNotificationType, type RFIDReaderOptions, type RFIDReaderQ, RFIDReaderRFMode, RFIDReaderRegion, RFIDReaderSerialNumber, RFIDReaderSession, RFIDReaderTagMetadata, RFIDReaderTagSingulationData, RFIDReaderTagSingulationFlag, RFIDReaderTarget, RFIDReaderVersion, RFIDTag, type RFIDTagMemoryAddress, RFIDTagMemoryBank, type RFIDTagPassword, RFIDTagPhase, SET_ANTENNA_PORTS, SET_CURRENT_REGION, SET_CURRENT_TAG_PROTOCOL, SET_FREQUENCY_HOPPING, SET_GPO, SET_PROTOCOL_CONFIGURATION, SET_READER_CONFIGURATION, SINGLE_TAG_INVENTORY, SYNCHRONOUS_INVENTORY, StreamingOTAClient, type StreamingOTAClientDelegate, StreamingOTAError, type StreamingOTAErrorCode, type TransportDelegate, TransportNotReady, type TransportProtocol, type TransportType, USBTransport, Unimplemented, WRITE_TAG_DATA, WRITE_TAG_EPC, WebSocketTransport, type WebSocketTransportOptions, WiFiTransportMode, calcCRC, commandCodeToName, decryptResponse, decryptResponseByte, defaultDelegate, defaultTransportDelegate, delay, dynamicQ, frequencyTable, getSubCRC, hexToBytes, int2Bytes, messageParser, moduleMessageParser, parseAntennaPorts, parseBatteryCycles, parseBatterySoc, parseBatterySoh, parseCommMode, parseDeviceName, parseFreqHopping, parseIPv4, parseMac, parseModel, parseNetworkPassword, parseNetworkSSID, parseNotificationType, parseProtocolConfig, parseReaderConfig, parseReaderSerialNumber, parseReaderVersion, parseRegion, parseSerialNumber, parseSetAntennaPortsRes, parseSetFreqHoppingRes, parseSetProtocolConfigRes, parseSetReaderConfigRes, parseSetRegionRes, parseSingleTag, parseTemperature, parseTime, parseVersion, parseWriteTagRes, readerError, sanitizeHost, staticQ, statusCodes, statusDescription, toHex };

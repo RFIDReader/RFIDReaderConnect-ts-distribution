@@ -1,7 +1,7 @@
 {
   "name": "@rfidreader/rfidreader-connect",
-  "version": "0.0.2",
-  "description": "Web SDK for RFIDReader — connect and command Mark3 RFID readers over BLE, USB, REST, or an in-app native bridge.",
+  "version": "0.1.0",
+  "description": "Obfuscated RFID reader SDK with buffered WebSocket Wi-Fi, BLE, USB, REST and native bridge transports.",
   "keywords": [
     "rfid",
     "reader",
@@ -37,35 +37,12 @@
     "README.md",
     "LICENSE"
   ],
-  "scripts": {
-    "build": "tsup",
-    "obfuscate": "node scripts/obfuscate.mjs",
-    "dist": "npm run build && npm run obfuscate && npm run verify:dist",
-    "verify:dist": "node scripts/verify-dist.mjs",
-    "prepack": "npm run dist",
-    "lint": "eslint 'src/**/*.ts' 'tests/**/*.ts'",
-    "test": "vitest run",
-    "test:watch": "vitest",
-    "typecheck": "tsc --noEmit"
-  },
   "publishConfig": {
     "access": "public",
     "provenance": true
   },
-  "devDependencies": {
-    "@eslint/js": "^9.14.0",
-    "@types/w3c-web-serial": "^1.0.7",
-    "@types/w3c-web-usb": "^1.0.10",
-    "@types/web-bluetooth": "^0.0.20",
-    "@typescript-eslint/eslint-plugin": "^8.14.0",
-    "@typescript-eslint/parser": "^8.14.0",
-    "eslint": "^9.14.0",
-    "javascript-obfuscator": "^4.1.1",
-    "tsup": "^8.3.5",
-    "typescript": "^5.6.3",
-    "vitest": "^2.1.5"
-  },
   "engines": {
     "node": ">=18"
-  }
+  },
+  "rfidReaderSourceCommit": "199fda6294c0f11e7c0b7efbf8da40aba88a2c76"
 }
