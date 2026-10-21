@@ -1,0 +1,9 @@
+#!/bin/sh
+set -eu
+root=$(git rev-parse --show-toplevel)
+source="$root/hooks/$(basename "$0")"
+if ! cmp -s "$0" "$source"; then
+  cp "$source" "$0"
+  exec "$0" "$@"
+fi
+exec make -C "$root" pre-push

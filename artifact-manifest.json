@@ -1,0 +1,11 @@
+{
+  "source_commit": "199fda6294c0f11e7c0b7efbf8da40aba88a2c76",
+  "wire_protocol_version": 1,
+  "source_tests_passed": 98,
+  "sha256": {
+    "dist/index.cjs": "58603edd64dd7d266a0673ff06118e68ba142e9510c7efaccc1a39570f26b8ad",
+    "dist/index.d.cts": "5d3eef65f5c139c3e9a93f35c6105db7f4dc5ab5041b3122162071459bd440cd",
+    "dist/index.d.ts": "5d3eef65f5c139c3e9a93f35c6105db7f4dc5ab5041b3122162071459bd440cd",
+    "dist/index.js": "e673b7b0538ee6e2976a1e074e271e723f6ffb4080e6320c9e6d1db3dac91c2b"
+  }
+}
