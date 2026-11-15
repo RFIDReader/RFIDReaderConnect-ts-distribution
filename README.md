@@ -1,6 +1,6 @@
 # RFIDReaderConnect Web SDK — distribution
 
-Compiled, obfuscated artifacts built from RFIDReader/RFIDReaderConnect-ts commit `199fda6294c0f11e7c0b7efbf8da40aba88a2c76`.
+Compiled, obfuscated artifacts built from RFIDReader/RFIDReaderConnect-ts commit `4af78f66d45e546733864d3b63098c55ecd9c685`.
 
 This revision adds `WebSocketTransport` for buffered continuous inventory over `ws://reader.local/stream`, validates module CRCs, bounds tag parsing, and serializes writes. It retains random-key response deobfuscation. Deploy the companion firmware with `/stream` before selecting this transport.
 

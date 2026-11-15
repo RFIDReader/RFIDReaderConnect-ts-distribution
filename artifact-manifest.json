@@ -1,11 +1,11 @@
 {
-  "source_commit": "199fda6294c0f11e7c0b7efbf8da40aba88a2c76",
+  "source_commit": "4af78f66d45e546733864d3b63098c55ecd9c685",
   "wire_protocol_version": 1,
-  "source_tests_passed": 98,
+  "source_tests_passed": 115,
   "sha256": {
-    "dist/index.cjs": "58603edd64dd7d266a0673ff06118e68ba142e9510c7efaccc1a39570f26b8ad",
-    "dist/index.d.cts": "5d3eef65f5c139c3e9a93f35c6105db7f4dc5ab5041b3122162071459bd440cd",
-    "dist/index.d.ts": "5d3eef65f5c139c3e9a93f35c6105db7f4dc5ab5041b3122162071459bd440cd",
-    "dist/index.js": "e673b7b0538ee6e2976a1e074e271e723f6ffb4080e6320c9e6d1db3dac91c2b"
+    "dist/index.cjs": "8800fbdae94eda22ed4f7989c7a5fce5ff624baed0b21f5632ee3c7288ea4389",
+    "dist/index.d.cts": "1bd8acb20a60b6cd566a1efe80fde9f79c671bec27fa59cfd6c6ebde7125363d",
+    "dist/index.d.ts": "1bd8acb20a60b6cd566a1efe80fde9f79c671bec27fa59cfd6c6ebde7125363d",
+    "dist/index.js": "00288198f24826c8571267ee756a3ffc5eac443fbf14fad73bde533ab3978799"
   }
 }

@@ -186,11 +186,13 @@ type RFIDReaderError = {
 } | {
     readonly kind: "readerError";
     readonly cmd?: number;
+    /** Reader/module status code when the reader rejected a command (e.g. 0x0400 = no tag found). */
+    readonly status?: number;
     readonly description: string;
 };
 declare const Unimplemented: RFIDReaderError;
 declare const TransportNotReady: RFIDReaderError;
-declare const readerError: (description: string, cmd?: number) => RFIDReaderError;
+declare const readerError: (description: string, cmd?: number, status?: number) => RFIDReaderError;
 
 interface RFIDReaderDelegate {
     rfidReaderDidConnect(): void;
@@ -201,6 +203,11 @@ interface RFIDReaderDelegate {
     rfidReaderDidStopScanning(): void;
     rfidReaderDidReadTag(tag: RFIDTag): void;
     rfidReaderDidEncounteredError(error: RFIDReaderError): void;
+    /**
+     * Bytes received from the reader. Over BLE/USB/Wi-Fi these are the wire
+     * chunks; over a `frames-v1` native bridge they are whole decoded frames
+     * (inventory tags parsed natively are delivered only via `rfidReaderDidReadTag`).
+     */
     rfidReaderDidReceiveRawData(data: number[]): void;
 }
 /** Default no-op delegate — override only the methods you care about. */
@@ -223,6 +230,8 @@ declare const Messenger: {
     readonly getCommMode: ReadonlyArray<number>;
     readonly setCommMode: (commMode: RFIDReaderCommMode) => number[];
     readonly getTime: ReadonlyArray<number>;
+    /** Sets the reader clock (UTC epoch seconds); firmware ignores times before 2020. */
+    readonly setTime: (epochSeconds: number) => number[];
     readonly getNetworkSSID: ReadonlyArray<number>;
     readonly setNetworkSSID: (ssid: string) => number[];
     readonly getNetworkPassword: ReadonlyArray<number>;
@@ -378,6 +387,14 @@ interface TransportDelegate {
     transportDidWriteMessage(data: number[]): void;
     transportDidReceiveMessage(data: number[]): void;
     transportDidEncounteredError(error: Error): void;
+    /**
+     * Fast path for transports whose host already decoded the wire stream
+     * (native bridge `frames-v1`): a decrypted, CRC-verified frame
+     * `[header][len][cmd][status 2B][payload][crc 2B]`.
+     */
+    transportDidReceiveFrame?(frame: number[]): void;
+    /** Fast path: an inventory tag already parsed by the native host. */
+    transportDidReadTag?(tag: RFIDTag): void;
 }
 declare const defaultTransportDelegate: TransportDelegate;
 
@@ -431,6 +448,9 @@ declare class RFIDReader {
     disconnect(): Promise<void>;
     getCommMode: () => Promise<void>;
     setCommMode: (m: RFIDReaderCommMode) => Promise<void>;
+    /** Reader clock; the reply is delivered as `{ time: epochSeconds | null }` for command 0x02. */
+    getTime: () => Promise<void>;
+    setTime: (epochSeconds: number) => Promise<void>;
     getNetworkSSID: () => Promise<void>;
     setNetworkSSID: (ssid: string) => Promise<void>;
     getNetworkPassword: () => Promise<void>;
@@ -497,8 +517,9 @@ declare class RFIDReader {
 }
 
 declare function parseCommMode(data: ArrayLike<number>): RFIDReaderCommMode | null;
-declare function parseTime(_data: ArrayLike<number>): {
-    time: null;
+/** Reader clock as UTC epoch seconds (`null` when the reply carries no timestamp). */
+declare function parseTime(data: ArrayLike<number>): {
+    time: number | null;
 };
 declare function parseNetworkSSID(data: ArrayLike<number>): {
     network_ssid: string;
@@ -544,7 +565,8 @@ declare function parseSetFreqHoppingRes(_data: ArrayLike<number>): null;
 declare function parseSetRegionRes(_data: ArrayLike<number>): null;
 declare function parseSetReaderConfigRes(_data: ArrayLike<number>): null;
 declare function parseSetProtocolConfigRes(_data: ArrayLike<number>): null;
-declare function parseFreqHopping(_data: ArrayLike<number>): null;
+/** Hop table as kHz values (each entry is a 4-byte big-endian frequency). */
+declare function parseFreqHopping(data: ArrayLike<number>): number[];
 declare function parseRegion(data: ArrayLike<number>): RFIDReaderRegion | null;
 declare function parseReaderConfig(data: ArrayLike<number>): {
     config: RFIDReaderConfiguration | null;
@@ -553,6 +575,12 @@ declare function parseReaderConfig(data: ArrayLike<number>): {
 declare function parseAntennaPorts(data: ArrayLike<number>): RFIDReaderAntennaPort[];
 declare function parseProtocolConfig(data: ArrayLike<number>): unknown;
 declare function parseSingleTag(data: ArrayLike<number>): RFIDTag;
+/**
+ * READ_TAG_DATA (0x28) response: `[option][metadata flags 2B + fields when option & 0x10][memory words]`.
+ * The read words are returned in `epc` / `epcLen` for parity with the native SDKs.
+ */
+declare function parseReadTagData(data: ArrayLike<number>): RFIDTag;
+/** WRITE_TAG_EPC (0x23) / WRITE_TAG_DATA (0x24) succeeded; failures arrive as reader errors. */
 declare function parseWriteTagRes(_data: ArrayLike<number>): boolean;
 declare function parseTemperature(data: ArrayLike<number>): {
     temperature: number;
@@ -673,6 +701,8 @@ type TransportType = {
  */
 interface NativeBridgeAPI {
     readonly __installed?: boolean;
+    /** Optional capabilities, e.g. `"frames-v1"` for the compact batched `frames` event. */
+    readonly features?: ReadonlyArray<string>;
     sendRawCmd(args: {
         cmd: string;
         calculateCRC?: boolean;
@@ -706,12 +736,28 @@ declare class BLETransport implements TransportProtocol {
         maximumWriteValueLength?: number;
         acceptAllDevices?: boolean;
         debug?: boolean;
+        /**
+         * A reader the user already picked (from `bluetoothDevice` of an earlier
+         * transport or `navigator.bluetooth.getDevices()`). Connecting reuses it
+         * without opening the chooser, so it works without a user gesture.
+         */
+        device?: BluetoothDevice;
     });
     private readonly hostname?;
+    private presetDevice?;
     private readonly acceptAllDevices;
     private readonly debug;
+    /** The reader picked for this transport; pass it as `device` to reconnect without the chooser. */
+    get bluetoothDevice(): BluetoothDevice | undefined;
     setDelegate(delegate: TransportDelegate): void;
     connect(): Promise<void>;
+    /**
+     * Connects GATT and subscribes to notifications. Chrome frequently fails the
+     * first GATT connect or service discovery right after the chooser closes
+     * (or after the reader rebooted), so transient failures are retried.
+     */
+    private openGatt;
+    private clearGattState;
     disconnect(): Promise<void>;
     sendData(data: ArrayLike<number>): Promise<void>;
 }
@@ -769,14 +815,21 @@ declare class USBTransport implements TransportProtocol {
 /**
  * Bridge transport for web apps hosted inside a native app that exposes
  * `window.RFIDReader` (see Apple/Android WebBridge). The native side owns the
- * reader lifecycle; this transport only forwards `sendRawCmd` and receives
- * raw hex frames via `on('raw', …)`.
+ * reader lifecycle; this transport forwards commands and receives replies.
+ *
+ * Hosts advertising `features: ["frames-v1"]` emit one compact `frames` batch
+ * per flush with frames the native SDK already decrypted and CRC-checked and
+ * tags it already parsed (see `BridgeBatch.ts`), so the web SDK does no wire
+ * decoding. Older hosts fall back to per-chunk `raw` hex.
  */
 declare class BridgeTransport implements TransportProtocol {
     private delegate;
     private readonly opts;
     private bridge?;
     private unsubs;
+    private compact;
+    /** True when the host streams pre-decoded `frames-v1` batches. */
+    get usesCompactFrames(): boolean;
     constructor(delegate?: TransportDelegate, opts?: {
         bridge?: NativeBridgeAPI;
         debug?: boolean;
@@ -791,6 +844,34 @@ declare global {
         RFIDReader?: NativeBridgeAPI;
     }
 }
+
+/**
+ * Feature flag advertised by native hosts (`window.RFIDReader.features`) that
+ * emit the compact `frames` event instead of per-chunk `raw` hex.
+ */
+declare const BRIDGE_FRAMES_FEATURE = "frames-v1";
+/**
+ * Compact batch emitted by the native bridge as a single string per flush:
+ * newline-separated records, in the order the native SDK decoded them.
+ *
+ * - `F<hex>` — a decrypted, CRC-verified frame
+ *   `[header][len][cmd][status 2B][payload][crc 2B]` (control responses,
+ *   inventory start/stop/heartbeat, error statuses).
+ * - `T<epc>,<pc>,<rssi>,<antenna>,<frequency>,<timestamp>,<phase>,<dataLen>`
+ *   — an inventory tag already parsed natively. `epc`, `frequency` and
+ *   `timestamp` are hex, the rest decimal; empty or missing fields are null.
+ *
+ * Positional records avoid repeating JSON keys for every tag and let the web
+ * SDK skip decryption, CRC checks and frame resynchronisation entirely.
+ */
+interface BridgeBatchSink {
+    frame(frame: number[]): void;
+    tag(tag: RFIDTag): void;
+    /** Called for a malformed record; decoding continues with the next record. */
+    error?(error: Error): void;
+}
+/** Decodes one `frames` batch, invoking `sink` in record order. Returns the number of records delivered. */
+declare function decodeBridgeBatch(batch: string, sink: BridgeBatchSink): number;
 
 interface WebSocketTransportOptions {
     readonly hostname: string;
@@ -815,4 +896,4 @@ declare class WebSocketTransport implements TransportProtocol {
     private notifyDisconnected;
 }
 
-export { ASYNCHRONOUS_INVENTORY, AsyncInventoryParser, type AsyncInventoryParserDelegate, BLETransport, BOOT_BOOTLOADER, BOOT_FIRMWARE, BridgeTransport, COMMAND_CIPHER_VERSION, GET_ANTENNA_PORTS, GET_AVAILABLE_REGIONS, GET_CURRENT_REGION, GET_CURRENT_TEMPERATURE, GET_FREQUENCY_HOPPING, GET_GPI, GET_PROTOCOL_CONFIGURATION, GET_READER_CONFIGURATION, GET_SERIAL_NUMBER, GET_TAG_BUFFER, GET_TAG_PROTOCOL, GET_VERSION, HEARTBEAT_PREFIX, KILL_TAG, LOCK_TAG, MODULETECH_PREAMBLE, MODULETECH_TERMINATOR, MSG_CCITT_CRC_POLY, MSG_CRC_INIT, Messenger, type NativeBridgeAPI, READ_TAG_DATA, RESTTransport, RFIDReader, RFIDReaderAntennaPort, RFIDReaderBaudRate, RFIDReaderCommMode, RFIDReaderConfiguration, type RFIDReaderDelegate, type RFIDReaderError, RFIDReaderModel, RFIDReaderNotificationType, type RFIDReaderOptions, type RFIDReaderQ, RFIDReaderRFMode, RFIDReaderRegion, RFIDReaderSerialNumber, RFIDReaderSession, RFIDReaderTagMetadata, RFIDReaderTagSingulationData, RFIDReaderTagSingulationFlag, RFIDReaderTarget, RFIDReaderVersion, RFIDTag, type RFIDTagMemoryAddress, RFIDTagMemoryBank, type RFIDTagPassword, RFIDTagPhase, SET_ANTENNA_PORTS, SET_CURRENT_REGION, SET_CURRENT_TAG_PROTOCOL, SET_FREQUENCY_HOPPING, SET_GPO, SET_PROTOCOL_CONFIGURATION, SET_READER_CONFIGURATION, SINGLE_TAG_INVENTORY, SYNCHRONOUS_INVENTORY, StreamingOTAClient, type StreamingOTAClientDelegate, StreamingOTAError, type StreamingOTAErrorCode, type TransportDelegate, TransportNotReady, type TransportProtocol, type TransportType, USBTransport, Unimplemented, WRITE_TAG_DATA, WRITE_TAG_EPC, WebSocketTransport, type WebSocketTransportOptions, WiFiTransportMode, calcCRC, commandCodeToName, decryptResponse, decryptResponseByte, defaultDelegate, defaultTransportDelegate, delay, dynamicQ, frequencyTable, getSubCRC, hexToBytes, int2Bytes, messageParser, moduleMessageParser, parseAntennaPorts, parseBatteryCycles, parseBatterySoc, parseBatterySoh, parseCommMode, parseDeviceName, parseFreqHopping, parseIPv4, parseMac, parseModel, parseNetworkPassword, parseNetworkSSID, parseNotificationType, parseProtocolConfig, parseReaderConfig, parseReaderSerialNumber, parseReaderVersion, parseRegion, parseSerialNumber, parseSetAntennaPortsRes, parseSetFreqHoppingRes, parseSetProtocolConfigRes, parseSetReaderConfigRes, parseSetRegionRes, parseSingleTag, parseTemperature, parseTime, parseVersion, parseWriteTagRes, readerError, sanitizeHost, staticQ, statusCodes, statusDescription, toHex };
+export { ASYNCHRONOUS_INVENTORY, AsyncInventoryParser, type AsyncInventoryParserDelegate, BLETransport, BOOT_BOOTLOADER, BOOT_FIRMWARE, BRIDGE_FRAMES_FEATURE, type BridgeBatchSink, BridgeTransport, COMMAND_CIPHER_VERSION, GET_ANTENNA_PORTS, GET_AVAILABLE_REGIONS, GET_CURRENT_REGION, GET_CURRENT_TEMPERATURE, GET_FREQUENCY_HOPPING, GET_GPI, GET_PROTOCOL_CONFIGURATION, GET_READER_CONFIGURATION, GET_SERIAL_NUMBER, GET_TAG_BUFFER, GET_TAG_PROTOCOL, GET_VERSION, HEARTBEAT_PREFIX, KILL_TAG, LOCK_TAG, MODULETECH_PREAMBLE, MODULETECH_TERMINATOR, MSG_CCITT_CRC_POLY, MSG_CRC_INIT, Messenger, type NativeBridgeAPI, READ_TAG_DATA, RESTTransport, RFIDReader, RFIDReaderAntennaPort, RFIDReaderBaudRate, RFIDReaderCommMode, RFIDReaderConfiguration, type RFIDReaderDelegate, type RFIDReaderError, RFIDReaderModel, RFIDReaderNotificationType, type RFIDReaderOptions, type RFIDReaderQ, RFIDReaderRFMode, RFIDReaderRegion, RFIDReaderSerialNumber, RFIDReaderSession, RFIDReaderTagMetadata, RFIDReaderTagSingulationData, RFIDReaderTagSingulationFlag, RFIDReaderTarget, RFIDReaderVersion, RFIDTag, type RFIDTagMemoryAddress, RFIDTagMemoryBank, type RFIDTagPassword, RFIDTagPhase, SET_ANTENNA_PORTS, SET_CURRENT_REGION, SET_CURRENT_TAG_PROTOCOL, SET_FREQUENCY_HOPPING, SET_GPO, SET_PROTOCOL_CONFIGURATION, SET_READER_CONFIGURATION, SINGLE_TAG_INVENTORY, SYNCHRONOUS_INVENTORY, StreamingOTAClient, type StreamingOTAClientDelegate, StreamingOTAError, type StreamingOTAErrorCode, type TransportDelegate, TransportNotReady, type TransportProtocol, type TransportType, USBTransport, Unimplemented, WRITE_TAG_DATA, WRITE_TAG_EPC, WebSocketTransport, type WebSocketTransportOptions, WiFiTransportMode, calcCRC, commandCodeToName, decodeBridgeBatch, decryptResponse, decryptResponseByte, defaultDelegate, defaultTransportDelegate, delay, dynamicQ, frequencyTable, getSubCRC, hexToBytes, int2Bytes, messageParser, moduleMessageParser, parseAntennaPorts, parseBatteryCycles, parseBatterySoc, parseBatterySoh, parseCommMode, parseDeviceName, parseFreqHopping, parseIPv4, parseMac, parseModel, parseNetworkPassword, parseNetworkSSID, parseNotificationType, parseProtocolConfig, parseReadTagData, parseReaderConfig, parseReaderSerialNumber, parseReaderVersion, parseRegion, parseSerialNumber, parseSetAntennaPortsRes, parseSetFreqHoppingRes, parseSetProtocolConfigRes, parseSetReaderConfigRes, parseSetRegionRes, parseSingleTag, parseTemperature, parseTime, parseVersion, parseWriteTagRes, readerError, sanitizeHost, staticQ, statusCodes, statusDescription, toHex };
